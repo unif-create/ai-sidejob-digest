@@ -1,0 +1,33 @@
+from publish import build_site, render_page
+
+
+def test_render_page_has_noindex_viewport_and_footer():
+    html = render_page("# 見出し\n\n本文 **強調**", "2026-09-14", [("2026-09-13", "archive/2026-09-13.html")])
+    assert '<meta name="robots" content="noindex">' in html
+    assert '<meta name="viewport"' in html
+    assert "<h1>見出し</h1>" in html and "<strong>強調</strong>" in html
+    assert 'href="archive/2026-09-13.html">2026-09-13' in html
+    assert "ユニフ" in html
+    assert "<title>2026-09-14 AI副業ニュース</title>" in html
+
+
+def test_build_site_writes_index_and_archive(tmp_path):
+    digest, site = tmp_path / "digest", tmp_path / "site"
+    digest.mkdir()
+    for d in ("2026-09-12", "2026-09-13", "2026-09-14"):
+        (digest / f"{d}.md").write_text(f"# {d} のダイジェスト\n\n## 今日のまとめ\n中身 {d}\n", encoding="utf-8")
+    written = build_site(digest, site, days=2)
+    index = (site / "index.html").read_text(encoding="utf-8")
+    assert "中身 2026-09-14" in index
+    assert 'href="archive/2026-09-13.html"' in index and "2026-09-12.html" not in index
+    assert (site / "archive" / "2026-09-14.html").exists()
+    assert (site / "archive" / "2026-09-12.html").exists()
+    assert 'href="../archive/2026-09-13.html"' in (site / "archive" / "2026-09-14.html").read_text(encoding="utf-8")
+    assert set(p.name for p in written) == {"index.html", "2026-09-12.html", "2026-09-13.html", "2026-09-14.html"}
+
+
+def test_build_site_without_digests(tmp_path):
+    digest = tmp_path / "digest"
+    digest.mkdir()
+    build_site(digest, tmp_path / "site")
+    assert "まだありません" in (tmp_path / "site" / "index.html").read_text(encoding="utf-8")
