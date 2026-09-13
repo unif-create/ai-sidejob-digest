@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>ぶべの開発日記</title>
+    <item>
+      <title>記事タイトル</title>
+      <pubDate>Sun, 13 Sep 2026 17:00:00 +0900</pubDate>
+      <link>https://note.com/bubecode/n/n1</link>
+      <guid>https://note.com/bubecode/n/n1</guid>
+      <description><![CDATA[<p>記事の冒頭です。</p>]]></description>
+    </item>
+  </channel>
+</rss>

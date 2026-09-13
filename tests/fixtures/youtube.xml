@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+  <title>テストチャンネル</title>
+  <entry>
+    <id>yt:video:abc123</id>
+    <yt:videoId>abc123</yt:videoId>
+    <yt:channelId>UC123</yt:channelId>
+    <title>テスト動画 1</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=abc123"/>
+    <published>2026-09-13T08:00:00+00:00</published>
+    <media:group>
+      <media:title>テスト動画 1</media:title>
+      <media:description>概要欄のテキスト &lt;b&gt;太字&lt;/b&gt;</media:description>
+    </media:group>
+  </entry>
+  <entry>
+    <id>yt:video:def456</id>
+    <yt:videoId>def456</yt:videoId>
+    <title>テスト動画 2</title>
+    <link rel="alternate" href="https://www.youtube.com/watch?v=def456"/>
+    <published>2026-09-01T08:00:00+00:00</published>
+    <media:group><media:description></media:description></media:group>
+  </entry>
+</feed>
