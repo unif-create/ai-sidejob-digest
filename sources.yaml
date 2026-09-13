@@ -1,0 +1,98 @@
+# 情報源の一覧。1 行足せば翌日から集まる。
+# type: youtube はチャンネル ID（UC…）、rss はフィード URL。lang: ja / en。topic は見出し分け用。
+
+# --- YouTube（日本語） ---
+- name: "プログラミングチュートリアル"
+  type: youtube
+  id: "UCNTxclE0N4qsUuirssL_D8w"
+  lang: ja
+  topic: 個人開発
+- name: "入江慎吾 / AIと個人開発"
+  type: youtube
+  id: "UC3wNxV5ZWOL9kf4v2oXGQbw"
+  lang: ja
+  topic: 個人開発
+- name: "いまにゅのAIプログラミング塾"
+  type: youtube
+  id: "UC0xRMqPOyRNPTaL6BxhbCnQ"
+  lang: ja
+  topic: AI活用
+- name: "にゃんたのAIチャンネル"
+  type: youtube
+  id: "UCZQVTC3uLCyuJUOcRlguazA"
+  lang: ja
+  topic: AI活用
+- name: "SHIFT AI ニュース"
+  type: youtube
+  id: "UCboaqA4fwGpljEKeUjO1iVQ"
+  lang: ja
+  topic: AIニュース
+- name: "カイシャインのSNS高校"
+  type: youtube
+  id: "UCnVERvtm7EFP3KQLIjecDIw"
+  lang: ja
+  topic: マーケ
+
+# --- YouTube（英語） ---
+- name: "Claude (Anthropic)"
+  type: youtube
+  id: "UCV03SRZXJEz-hchIAogeJOg"
+  lang: en
+  topic: 公式
+- name: "Matt Wolfe"
+  type: youtube
+  id: "UChpleBmo18P08aKCIgti38g"
+  lang: en
+  topic: AIニュース
+- name: "Greg Isenberg"
+  type: youtube
+  id: "UCPjNBjflYl0-HQtUvOx0Ibw"
+  lang: en
+  topic: 収益化
+- name: "Starter Story"
+  type: youtube
+  id: "UChhw6DlKKTQ9mYSpTfXUYqA"
+  lang: en
+  topic: 収益化
+
+# --- RSS ---
+- name: "note: Kengo KOSAKAI"
+  type: rss
+  id: "https://note.com/kantagon/rss"
+  lang: ja
+  topic: AI活用
+- name: "note: あいすけ"
+  type: rss
+  id: "https://note.com/suke_ai_code/rss"
+  lang: ja
+  topic: 収益化
+- name: "note: ぶべの開発日記"
+  type: rss
+  id: "https://note.com/bubecode/rss"
+  lang: ja
+  topic: 個人開発
+- name: "Zenn: claudecode"
+  type: rss
+  id: "https://zenn.dev/topics/claudecode/feed"
+  lang: ja
+  topic: AI活用
+- name: "Zenn: 個人開発"
+  type: rss
+  id: "https://zenn.dev/topics/%E5%80%8B%E4%BA%BA%E9%96%8B%E7%99%BA/feed"
+  lang: ja
+  topic: 個人開発
+- name: "Qiita: claudecode"
+  type: rss
+  id: "https://qiita.com/tags/claudecode/feed"
+  lang: ja
+  topic: AI活用
+- name: "OpenAI News"
+  type: rss
+  id: "https://openai.com/news/rss.xml"
+  lang: en
+  topic: 公式
+- name: "Claude Code Releases"
+  type: rss
+  id: "https://github.com/anthropics/claude-code/releases.atom"
+  lang: en
+  topic: 公式
