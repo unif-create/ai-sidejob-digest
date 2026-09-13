@@ -83,3 +83,73 @@ def fallback_digest(date_str: str, items: list[dict], reason: str) -> str:
         out.extend(f"- [{it['title']}]({it['url']})（{it['source']}）" for it in its)
         out.append("")
     return "\n".join(out) + "\n"
+
+
+def _claude_cmd() -> list[str]:
+    exe = shutil.which("claude")
+    if not exe:
+        raise RuntimeError("claude コマンドが見つからない")
+    return [exe]
+
+
+def run_claude(prompt: str, model: str = "sonnet", timeout: int = 900) -> str:
+    """claude -p をツールなしで呼ぶ。資料に指示文が混じっていても何も実行できない。"""
+    cmd = _claude_cmd() + ["-p", "--model", model, "--tools", "", "--output-format", "text", "--no-session-persistence"]
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    r = subprocess.run(cmd, input=prompt, capture_output=True, encoding="utf-8", errors="replace", env=env, timeout=timeout)
+    if r.returncode != 0:
+        raise RuntimeError(f"claude -p が終了コード {r.returncode}: {r.stderr[-500:]}")
+    out = r.stdout.strip()
+    if not out.startswith("#"):
+        raise RuntimeError(f"出力がテンプレートの形でない: {out[:100]!r}")
+    return out
+
+
+def _archive_inbox(inbox_dir: Path, data_dir: Path, date_str: str) -> Path:
+    dest = Path(data_dir) / date_str
+    n = 2
+    while dest.exists():
+        dest = Path(data_dir) / f"{date_str}_{n}"
+        n += 1
+    shutil.move(str(inbox_dir), str(dest))
+    (Path(inbox_dir) / "transcripts").mkdir(parents=True)
+    save_json(Path(inbox_dir) / "items.json", [])
+    return dest
+
+
+def _run_with_retry(run, prompt, retry_wait, log):
+    try:
+        return run(prompt)
+    except Exception as e:
+        log(f"要約に失敗、{retry_wait} 秒後に再試行: {e}")
+        time.sleep(retry_wait)
+        return run(prompt)
+
+
+def summarize(inbox_dir: Path = INBOX, data_dir: Path = DATA, state_dir: Path = STATE, digest_dir: Path = DIGEST,
+              prompts_dir: Path = PROMPTS, *, run=run_claude, now: datetime | None = None,
+              retry_wait: int = 600, log=print) -> Path:
+    now = (now or datetime.now(timezone.utc)).astimezone()
+    date_str = now.strftime("%Y-%m-%d")
+    inbox_dir, digest_dir = Path(inbox_dir), Path(digest_dir)
+    items = load_json(inbox_dir / "items.json", [])
+    failures = load_json(Path(state_dir) / "failures.json", {})
+    template = (Path(prompts_dir) / "digest.md").read_text(encoding="utf-8")
+    materials = build_materials(items, inbox_dir)
+    log(f"資料 {len(items)} 件、約 {estimate_tokens(materials, 'ja'):,} トークン")
+    try:
+        body = _run_with_retry(run, build_prompt(template, materials, date_str), retry_wait, log)
+    except Exception as e:
+        log(f"要約を諦めて一覧だけ出す: {e}")
+        body = fallback_digest(date_str, items, str(e)[:80])
+    text = body.rstrip() + "\n\n" + failures_section(failures)
+    digest_dir.mkdir(parents=True, exist_ok=True)
+    out = digest_dir / f"{date_str}.md"
+    out.write_text(text.rstrip() + "\n", encoding="utf-8")
+    dest = _archive_inbox(inbox_dir, data_dir, date_str)
+    log(f"ダイジェスト {out.name} を書き、資料を {dest.name} に移した")
+    return out
+
+
+if __name__ == "__main__":
+    print(summarize())
