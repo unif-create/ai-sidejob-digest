@@ -1,0 +1,5 @@
+feedparser>=6.0
+pyyaml>=6.0
+markdown>=3.5
+yt-dlp
+pytest>=8.0
