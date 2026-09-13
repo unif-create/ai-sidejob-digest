@@ -96,6 +96,7 @@ def run_claude(prompt: str, model: str = "sonnet", timeout: int = 900) -> str:
     """claude -p をツールなしで呼ぶ。資料に指示文が混じっていても何も実行できない。"""
     cmd = _claude_cmd() + ["-p", "--model", model, "--tools", "", "--output-format", "text", "--no-session-persistence"]
     env = {**os.environ, "PYTHONIOENCODING": "utf-8"}
+    env.pop("ANTHROPIC_API_KEY", None)
     r = subprocess.run(cmd, input=prompt, capture_output=True, encoding="utf-8", errors="replace", env=env, timeout=timeout)
     if r.returncode != 0:
         raise RuntimeError(f"claude -p が終了コード {r.returncode}: {r.stderr[-500:]}")
