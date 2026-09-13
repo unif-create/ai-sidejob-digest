@@ -126,22 +126,71 @@ def _run_with_retry(run, prompt, retry_wait, log):
         return run(prompt)
 
 
+def summarize_items_first(items: list[dict], inbox_dir: Path, item_template: str, run, log) -> list[dict]:
+    """2 段目: 1 本ずつ 5 行に縮めてから束ねる。"""
+    out = []
+    for it in items:
+        materials = build_materials([it], inbox_dir)
+        try:
+            short = run(build_prompt(item_template, materials, ""))
+        except Exception as e:
+            log(f"  1 本要約に失敗 {it['title'][:30]}: {e}")
+            short = (it.get("summary") or "")[:500]
+        out.append({**it, "summary": short, "transcript_file": None})
+    return out
+
+
+def _make_digest(items, inbox_dir, prompts_dir, date_str, run, retry_wait, log) -> str:
+    template = (Path(prompts_dir) / "digest.md").read_text(encoding="utf-8")
+    materials = build_materials(items, inbox_dir)
+    est = estimate_tokens(materials, "ja")
+    log(f"資料 {len(items)} 件、約 {est:,} トークン")
+    if est > TOKEN_LIMIT:
+        log("上限を超えるので 1 本ずつ要約してから束ねる")
+        item_template = (Path(prompts_dir) / "item.md").read_text(encoding="utf-8")
+        items = summarize_items_first(items, inbox_dir, item_template, run, log)
+        materials = build_materials(items, inbox_dir)
+    try:
+        return _run_with_retry(run, build_prompt(template, materials, date_str), retry_wait, log)
+    except Exception as e:
+        log(f"要約を諦めて一覧だけ出す: {e}")
+        return fallback_digest(date_str, items, str(e)[:80])
+
+
+def retry_fallbacks(data_dir, digest_dir, prompts_dir, state_dir, *, run=run_claude, now=None,
+                    days: int = 3, retry_wait: int = 0, log=print) -> list[Path]:
+    now = (now or datetime.now(timezone.utc)).astimezone()
+    done = []
+    for p in sorted(Path(digest_dir).glob("*.md")):
+        if not p.read_text(encoding="utf-8").startswith("<!-- fallback -->"):
+            continue
+        try:
+            age = (now.date() - datetime.strptime(p.stem, "%Y-%m-%d").date()).days
+        except ValueError:
+            continue
+        src = Path(data_dir) / p.stem
+        if age > days or not (src / "items.json").exists():
+            continue
+        log(f"{p.name} の要約を作り直す")
+        items = load_json(src / "items.json", [])
+        body = _make_digest(items, src, prompts_dir, p.stem, run, retry_wait, log)
+        if body.startswith("<!-- fallback -->"):
+            continue
+        p.write_text(body.rstrip() + "\n", encoding="utf-8")
+        done.append(p)
+    return done
+
+
 def summarize(inbox_dir: Path = INBOX, data_dir: Path = DATA, state_dir: Path = STATE, digest_dir: Path = DIGEST,
               prompts_dir: Path = PROMPTS, *, run=run_claude, now: datetime | None = None,
               retry_wait: int = 600, log=print) -> Path:
     now = (now or datetime.now(timezone.utc)).astimezone()
     date_str = now.strftime("%Y-%m-%d")
     inbox_dir, digest_dir = Path(inbox_dir), Path(digest_dir)
+    retry_fallbacks(data_dir, digest_dir, prompts_dir, state_dir, run=run, now=now, log=log)
     items = load_json(inbox_dir / "items.json", [])
     failures = load_json(Path(state_dir) / "failures.json", {})
-    template = (Path(prompts_dir) / "digest.md").read_text(encoding="utf-8")
-    materials = build_materials(items, inbox_dir)
-    log(f"資料 {len(items)} 件、約 {estimate_tokens(materials, 'ja'):,} トークン")
-    try:
-        body = _run_with_retry(run, build_prompt(template, materials, date_str), retry_wait, log)
-    except Exception as e:
-        log(f"要約を諦めて一覧だけ出す: {e}")
-        body = fallback_digest(date_str, items, str(e)[:80])
+    body = _make_digest(items, inbox_dir, prompts_dir, date_str, run, retry_wait, log)
     text = body.rstrip() + "\n\n" + failures_section(failures)
     digest_dir.mkdir(parents=True, exist_ok=True)
     out = digest_dir / f"{date_str}.md"

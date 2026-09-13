@@ -115,3 +115,46 @@ def test_summarize_with_empty_inbox_writes_no_news(tmp_path):
     now = datetime(2026, 9, 14, 5, 0, tzinfo=JST)
     out = summarize(inbox, tmp_path / "data", tmp_path / "state", tmp_path / "digest", prompts, run=fake_run, now=now, log=lambda *_: None)
     assert "新着なし" in out.read_text(encoding="utf-8")
+
+
+from summarize import TOKEN_LIMIT, retry_fallbacks, summarize_items_first
+
+
+def test_two_stage_when_materials_are_large(tmp_path):
+    # build_materials は 1 本あたり既定 60000 文字（日本語で約 3 万トークン）に切り詰めるので、
+    # 1 本の資料だけでは TOKEN_LIMIT（8 万トークン）を超えない。3 本の大きい動画（各約 3 万トークン、
+    # 合計約 9 万トークン）で初めて超え、2 段要約に切り替わることを確認する。
+    inbox, prompts = setup_inbox(tmp_path, [])
+    big = "あ" * 70000  # 60000 文字に切り詰められる
+    items = []
+    for n in (1, 2, 3):
+        (inbox / "transcripts" / f"v{n}.txt").write_text(big, encoding="utf-8")
+        items.append(mk(f"yt:v{n}", type="youtube", transcript_file=f"transcripts/v{n}.txt", transcript_lang="ja"))
+    items.append(mk("b"))
+    (inbox / "items.json").write_text(json.dumps(items, ensure_ascii=False), encoding="utf-8")
+    prompts_seen = []
+    def fake_run(prompt, **_):
+        prompts_seen.append(prompt)
+        return "5 行要約" if len(prompts_seen) <= 4 else "# 2026-09-14 のダイジェスト\n\n## 今日のまとめ\nOK\n"
+    now = datetime(2026, 9, 14, 5, 0, tzinfo=JST)
+    summarize(inbox, tmp_path / "data", tmp_path / "state", tmp_path / "digest", prompts, run=fake_run, now=now, log=lambda *_: None)
+    assert len(prompts_seen) == 5            # 1 本ずつ 4 回 + 束ねる 1 回
+    assert "5 行要約" in prompts_seen[4] and big[:1000] not in prompts_seen[4]
+
+
+def test_retry_fallbacks_rebuilds_recent_fallback_digest(tmp_path):
+    data, digest, prompts, state = tmp_path / "data", tmp_path / "digest", tmp_path / "prompts", tmp_path / "state"
+    for d in (data / "2026-09-13", digest, prompts, state):
+        d.mkdir(parents=True)
+    (data / "2026-09-13" / "items.json").write_text(json.dumps([mk("a")], ensure_ascii=False), encoding="utf-8")
+    (digest / "2026-09-13.md").write_text("<!-- fallback -->\n# 2026-09-13 のダイジェスト\n", encoding="utf-8")
+    (digest / "2026-09-01.md").write_text("<!-- fallback -->\n# 古い\n", encoding="utf-8")
+    (prompts / "digest.md").write_text("# {DATE}\n{MATERIALS}", encoding="utf-8")
+    (prompts / "item.md").write_text("{MATERIALS}", encoding="utf-8")
+    def fake_run(prompt, **_):
+        return "# 2026-09-13 のダイジェスト\n\n## 今日のまとめ\n作り直した\n"
+    now = datetime(2026, 9, 14, 5, 0, tzinfo=JST)
+    done = retry_fallbacks(data, digest, prompts, state, run=fake_run, now=now, log=lambda *_: None)
+    assert done == [digest / "2026-09-13.md"]
+    assert "作り直した" in (digest / "2026-09-13.md").read_text(encoding="utf-8")
+    assert (digest / "2026-09-01.md").read_text(encoding="utf-8").startswith("<!-- fallback -->")  # 3 日より古いものは触らない
