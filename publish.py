@@ -1,11 +1,76 @@
 """公開: digest/*.md を HTML にしてリポジトリ直下に置き、git で push する。"""
 import subprocess
+from html.parser import HTMLParser
 from pathlib import Path
 
 import markdown
 
 ROOT = Path(__file__).parent
 DIGEST = ROOT / "digest"
+
+# markdown ライブラリは本文中の生 HTML タグを既定でそのまま通す。ダイジェストの本文は
+# 外部の RSS・YouTube から拾った記事タイトル・概要を Claude が引用して作るので、
+# 情報源に <script> 等が混ざっていた場合にそのまま公開ページへ出てしまう。
+# 許可タグだけを通すサニタイザで、変換後の HTML を掃除してから埋め込む（2026-09-13 追加）。
+_ALLOWED_TAGS = {"p", "br", "hr", "strong", "em", "b", "i", "code", "pre",
+                 "ul", "ol", "li", "a", "h1", "h2", "h3", "h4", "blockquote"}
+_ALLOWED_ATTRS = {"a": {"href"}}
+_SAFE_URL_SCHEMES = ("http://", "https://", "/", "#", "mailto:")
+
+
+class _Sanitizer(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=False)
+        self.out = []
+        self._skip_depth = 0  # script/style などは中身ごと落とす
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in _ALLOWED_TAGS:
+            self._skip_depth += 1
+            return
+        if self._skip_depth:
+            return
+        kept = []
+        for name, value in attrs:
+            if name not in _ALLOWED_ATTRS.get(tag, set()):
+                continue
+            if name == "href" and value and not value.lower().startswith(_SAFE_URL_SCHEMES):
+                continue
+            kept.append(f'{name}="{value or ""}"')
+        attr_str = (" " + " ".join(kept)) if kept else ""
+        self.out.append(f"<{tag}{attr_str}>")
+
+    def handle_startendtag(self, tag, attrs):
+        if tag in _ALLOWED_TAGS and not self._skip_depth:
+            self.handle_starttag(tag, attrs)
+
+    def handle_endtag(self, tag):
+        if tag not in _ALLOWED_TAGS:
+            if self._skip_depth:
+                self._skip_depth -= 1
+            return
+        if not self._skip_depth:
+            self.out.append(f"</{tag}>")
+
+    def handle_data(self, data):
+        if not self._skip_depth:
+            self.out.append(data)
+
+    def handle_entityref(self, name):
+        if not self._skip_depth:
+            self.out.append(f"&{name};")
+
+    def handle_charref(self, name):
+        if not self._skip_depth:
+            self.out.append(f"&#{name};")
+
+
+def sanitize_html(html: str) -> str:
+    """許可タグ・許可属性だけを残す。script/style/iframe 等はタグごと中身も落とす。"""
+    p = _Sanitizer()
+    p.feed(html)
+    p.close()
+    return "".join(p.out)
 
 CSS = """
 html{color-scheme:light}body{margin:0;background:#fff;color:#111;font-family:-apple-system,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;line-height:1.7;overflow-wrap:anywhere}
@@ -17,7 +82,7 @@ footer{font-size:.8rem;color:#555;margin-top:2rem}
 
 
 def render_page(md_text: str, title: str, archive_links: list[tuple[str, str]]) -> str:
-    body = markdown.markdown(md_text, extensions=["nl2br"])
+    body = sanitize_html(markdown.markdown(md_text, extensions=["nl2br"]))
     links = " ".join(f'<a href="{href}">{label}</a>' for label, href in archive_links)
     return (
         "<!doctype html><html lang=\"ja\"><head><meta charset=\"utf-8\">"

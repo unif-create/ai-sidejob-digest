@@ -31,3 +31,24 @@ def test_build_site_without_digests(tmp_path):
     digest.mkdir()
     build_site(digest, tmp_path / "site")
     assert "まだありません" in (tmp_path / "site" / "index.html").read_text(encoding="utf-8")
+
+
+from publish import sanitize_html
+
+
+def test_sanitize_html_strips_script_and_event_handlers():
+    out = sanitize_html('<p>ok</p><script>alert(1)</script><img src=x onerror="alert(1)">')
+    assert "<script>" not in out and "alert(1)" not in out
+    assert "onerror" not in out
+    assert "<p>ok</p>" in out
+
+
+def test_sanitize_html_strips_javascript_href_but_keeps_normal_link():
+    out = sanitize_html('<a href="javascript:alert(1)">bad</a><a href="https://x/">good</a>')
+    assert "javascript:" not in out
+    assert 'href="https://x/"' in out and ">good</a>" in out
+
+
+def test_sanitize_html_drops_iframe_and_style_tags():
+    out = sanitize_html('<iframe src="//evil"></iframe><style>body{}</style><b>b</b>')
+    assert "<iframe" not in out and "<style" not in out and "<b>b</b>" in out
